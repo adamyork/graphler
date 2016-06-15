@@ -16,10 +16,11 @@ var chalk = require('chalk');
 
 var url = process.argv[2];
 var gdata = process.argv[3];
-var glabel = process.argv[4];
-var gtype = process.argv[5];
-var transformF = process.argv[6];
-var transformArg = process.argv[7];
+var eltype = process.argv[4];
+var glabel = process.argv[5];
+var gtype = process.argv[6];
+var transformF = process.argv[7];
+var transformArg = process.argv[8];
 
 var WBG_LOG_PREFIX = chalk.magenta('wiki-bar-graph');
 var WBG_LOG_POSTFIX = chalk.magenta('goodbye') + chalk.blue('!');
@@ -40,12 +41,31 @@ function log() {
 
 function buildDataURI(chunks) {
     var $ = cheerio.load(chunks);
-    var tables = $('table');
+    var tables;
+    switch (eltype) {
+        case 'td':
+        case 'th':
+            tables = $('table');
+            break;
+        case 'ul':
+            tables = $('ul');
+            break;
+        case 'ol':
+            tables = $('ol');
+            break;
+        default:
+            break;
+    }
     log('transforming column values with', transformF + '...');
     if (gdata.indexOf('[') === 0) {
         gdata = gdata.slice(1, gdata.length - 1).split(',');
     }
-    var dataset = getDatasetFor(gdata, glabel, tables, transformF, transformArg, $);
+    var dataset;
+    if (eltype === 'td' || eltype === 'th') {
+        dataset = getDatasetFor(gdata, glabel, tables, transformF, transformArg, $);
+    } else {
+        dataset = getDatasetForList(gdata, glabel, tables, transformF, transformArg, $);
+    }
     var groups = _.groupBy(dataset, function(data) {
         return data.value;
     });
@@ -81,7 +101,7 @@ function getDatasetFor(data, label, tables, transformF, transformArg, $, count, 
     }
     var again = true;
     tables.each(function(i, table) {
-        var headers = $(table).find('th');
+        var headers = $(table).find(eltype);
         headers.each(function(j, header) {
             var text = $(header).text().toLowerCase();
             if (count) {
@@ -134,6 +154,26 @@ function getDatasetFor(data, label, tables, transformF, transformArg, $, count, 
     }
 }
 
+function getDatasetForList(data, label, tables, transformF, transformArg, $) {
+    var found = [];
+    tables.each(function(i, table) {
+        var headers = $(table).find('li');
+        headers.each(function(j, header) {
+            var text = $(header).text().toLowerCase();
+            if (transformF) {
+                var f = new Function(transformArg, transformF); //jshint ignore:line
+                text = f(text);
+            }
+            var obj = {
+                'value': text
+            };
+            found.push(obj);
+        });
+    });
+    console.log('found', found);
+    return found;
+}
+
 function sendDataURI(data, values, counts) {
     var html = data.toString();
     html = html.replace('titleToken', '"' + glabel + '"');
@@ -143,7 +183,7 @@ function sendDataURI(data, values, counts) {
     if (gtype === 'bar' || gtype === 'pie') {
         html = html.replace('colorsToken', JSON.stringify(getColors(values)));
     } else {
-        html = html.replace('colorsToken', "'" + generateHex() + "'");
+        html = html.replace('colorsToken', '"' + generateHex() + '"');
     }
     var buf = new Buffer(html, 'UTF-8');
     var dataURI = 'data:text/html;base64,' + buf.toString('base64');
@@ -170,7 +210,7 @@ function getColors(values) {
     var colors = [];
     _.each(values, function() {
         colors.push(generateHex());
-    })
+    });
     return colors;
 }
 
