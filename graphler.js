@@ -17,8 +17,9 @@ var chalk = require('chalk');
 var url = process.argv[2];
 var gdata = process.argv[3];
 var glabel = process.argv[4];
-var transformF = process.argv[5];
-var transformArg = process.argv[6];
+var gtype = process.argv[5];
+var transformF = process.argv[6];
+var transformArg = process.argv[7];
 
 var WBG_LOG_PREFIX = chalk.magenta('wiki-bar-graph');
 var WBG_LOG_POSTFIX = chalk.magenta('goodbye') + chalk.blue('!');
@@ -136,6 +137,7 @@ function getDatasetFor(data, label, tables, transformF, transformArg, $, count, 
 function sendDataURI(data, values, counts) {
     var html = data.toString();
     html = html.replace('titleToken', '"' + glabel + '"');
+    html = html.replace('chartTypeToken', '"' + gtype + '"');
     html = html.replace('labelsToken', JSON.stringify(values));
     html = html.replace('dataToken', '[' + counts + ']');
     var buf = new Buffer(html, 'UTF-8');
