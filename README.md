@@ -35,16 +35,26 @@ node graphler.js "<url>" "<column identifier(s)>" "<graph title>" "<graph type>"
 ##Examples
 
 ###Paranormal Televsion series starts by year
+win
 ````
 node graphler.js "https://en.wikipedia.org/wiki/Paranormal_television" "original run" "shows per year" "line" "var pattern = '[' + String.fromCharCode(8211) + '\\'+String.fromCharCode(45) + String.fromCharCode(115) + ']+'; var regex = new RegExp(pattern); var split = str.split(regex); if (split.length > 1) {return split[0]; } else {return str; }" "str"
+````
+mac
+````
+node graphler.js "https://en.wikipedia.org/wiki/Paranormal_television" "original run" "shows per year" "line" "var pattern = '[' + String.fromCharCode(8211) + '\\\'+String.fromCharCode(45) + String.fromCharCode(115) + ']+'; var regex = new RegExp(pattern); var split = str.split(regex); if (split.length > 1) {return split[0]; } else {return str; }" "str"
 ````
 ###Paranormal Televsion series by network
 ````
 node graphler.js "https://en.wikipedia.org/wiki/Paranormal_television" "original channel" "shows per year" "bar" "var split = str.split(','); if (split.length > 1) {return split[0]; } else {return str; }" "str"
 ```
 ###Paranormal Televsion series ends by year
+win
 ````
 node graphler.js "https://en.wikipedia.org/wiki/Paranormal_television" "original run" "shows per year" "pie" "var pattern = '[' + String.fromCharCode(8211) + '\\'+String.fromCharCode(45) + String.fromCharCode(115) + ',\\s]+'; var regex = new RegExp(pattern); var split = str.split(regex); if (split.length > 1) {return split[1].toLowerCase(); } else {return str.toLowerCase(); }" "str"
+````
+mac
+````
+node graphler.js "https://en.wikipedia.org/wiki/Paranormal_television" "original run" "shows per year" "pie" "var pattern = '[' + String.fromCharCode(8211) + '\\\'+String.fromCharCode(45) + String.fromCharCode(115) + ',\\s]+'; var regex = new RegExp(pattern); var split = str.split(regex); if (split.length > 1) {return split[1].toLowerCase(); } else {return str.toLowerCase(); }" "str"
 ````
 ###All south park episodes by month
 ````

@@ -140,6 +140,11 @@ function sendDataURI(data, values, counts) {
     html = html.replace('chartTypeToken', '"' + gtype + '"');
     html = html.replace('labelsToken', JSON.stringify(values));
     html = html.replace('dataToken', '[' + counts + ']');
+    if (gtype === 'bar' || gtype === 'pie') {
+        html = html.replace('colorsToken', JSON.stringify(getColors(values)));
+    } else {
+        html = html.replace('colorsToken', "'" + generateHex() + "'");
+    }
     var buf = new Buffer(html, 'UTF-8');
     var dataURI = 'data:text/html;base64,' + buf.toString('base64');
     var app = express();
@@ -159,6 +164,23 @@ function sendDataURI(data, values, counts) {
         var port = server.address().port;
         safeOpen('http://localhost:' + port + '?port=' + port);
     });
+}
+
+function getColors(values) {
+    var colors = [];
+    _.each(values, function() {
+        colors.push(generateHex());
+    })
+    return colors;
+}
+
+function generateHex(previous) {
+    var hex = '#' + Math.floor(Math.random() * 16777215).toString(16);
+    if (hex !== previous) {
+        return hex;
+    } else {
+        return generateHex(hex);
+    }
 }
 
 log(WBG_LOG_PREFIX);
