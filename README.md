@@ -77,7 +77,6 @@ Understandable. From you browser simply select 'save page as'. Everything the gr
 
 - Works in a very anonymous way;treats dom elements generally. For example, there is currently no way to say grab data from the 6th , and only 6th table on a page, if the column identifier is shared with other tables. Furthermore, specific selectors like #id's and .class selectors are not supported.
 
-##TODO
-
-- add support for colors, legends, etc
+#TODO
+- add support for ul and ol
 
