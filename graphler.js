@@ -42,16 +42,20 @@ function log() {
 function buildDataURI(chunks) {
     var $ = cheerio.load(chunks);
     var tables;
+    var dataset;
     switch (eltype) {
         case 'td':
         case 'th':
             tables = $('table');
+            dataset = getDatasetFor(gdata, glabel, tables, transformF, transformArg, $);
             break;
         case 'ul':
             tables = $('ul');
+            dataset = getDatasetForList(gdata, glabel, tables, transformF, transformArg, $);
             break;
         case 'ol':
             tables = $('ol');
+            dataset = getDatasetForList(gdata, glabel, tables, transformF, transformArg, $);
             break;
         default:
             break;
@@ -59,12 +63,6 @@ function buildDataURI(chunks) {
     log('transforming column values with', transformF + '...');
     if (gdata.indexOf('[') === 0) {
         gdata = gdata.slice(1, gdata.length - 1).split(',');
-    }
-    var dataset;
-    if (eltype === 'td' || eltype === 'th') {
-        dataset = getDatasetFor(gdata, glabel, tables, transformF, transformArg, $);
-    } else {
-        dataset = getDatasetForList(gdata, glabel, tables, transformF, transformArg, $);
     }
     var groups = _.groupBy(dataset, function(data) {
         return data.value;
@@ -170,7 +168,6 @@ function getDatasetForList(data, label, tables, transformF, transformArg, $) {
             found.push(obj);
         });
     });
-    console.log('found', found);
     return found;
 }
 
