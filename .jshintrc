@@ -54,6 +54,12 @@
     "globals": {
         "angular": false,
         "$": false,
-        "_": true
+        "_": true,
+        "Chart": false,
+        "chartTypeToken": false,
+        "labelsToken": false,
+        "titleToken": false,
+        "dataToken": false,
+        "colorsToken": false
     }
 }
