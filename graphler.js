@@ -21,10 +21,10 @@ var glabel = process.argv[5];
 var gtype = process.argv[6];
 var transformF = process.argv[7];
 var transformArg = process.argv[8];
+var verbose = process.argv[9] || false;
 
-var WBG_LOG_PREFIX = chalk.magenta('wiki-bar-graph');
-var WBG_LOG_POSTFIX = chalk.magenta('goodbye') + chalk.blue('!');
-var WBG_DELIMITER = chalk.grey('________________________________________________________________');
+var G_LOG_PREFIX = chalk.magenta('wiki-bar-graph');
+var G_LOG_POSTFIX = chalk.magenta('goodbye') + chalk.blue('!');
 
 function log() {
     var str = '';
@@ -98,8 +98,14 @@ function getDatasetFor(data, label, tables, transformF, transformArg, $, count, 
         current = data;
     }
     var again = true;
+    if (verbose) {
+        log('found ' + tables.length + ' tables');
+    }
     tables.each(function(i, table) {
         var headers = $(table).find(eltype);
+        if (verbose) {
+            log('found ' + headers.length + ' headers in table ' + i);
+        }
         headers.each(function(j, header) {
             var text = $(header).text().toLowerCase();
             if (count) {
@@ -132,8 +138,14 @@ function getDatasetFor(data, label, tables, transformF, transformArg, $, count, 
     var transformed = filtered.map(function(i, cell) {
         var text = $(cell).text();
         if (transformF) {
+            if (verbose) {
+                log('text before transform', text);
+            }
             var f = new Function(transformArg, transformF); //jshint ignore:line
             text = f(text);
+            if (verbose) {
+                log('text after transform', text);
+            }
         }
         return {
             'value': text
@@ -191,7 +203,7 @@ function sendDataURI(data, values, counts) {
         log('cleaning up...');
         setTimeout(function() {
             log('shutting down. thank you for using wiki-bar-graph.');
-            log(WBG_LOG_POSTFIX);
+            log(G_LOG_POSTFIX);
             server.close();
             process.exit(0);
         }, 1000);
@@ -220,7 +232,7 @@ function generateHex(previous) {
     }
 }
 
-log(WBG_LOG_PREFIX);
+log(G_LOG_PREFIX);
 log('getting data for', url + '...');
 
 request

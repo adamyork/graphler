@@ -32,6 +32,7 @@ node graphler.js "<url>" "<el>" "<column identifier(s)>" "<graph title>" "<graph
 - graph type - supported types are `line`,`bar`,`pie`, and `radar`
 - column value normalizer - OPTIONAL...kinda - the inner body of a transform function you would like applied to each value. While it is optional, most column value actually contain a variety of data points, that don't make sense to plot collectively. A simple split is usually sufficient to isolate the value you want to see.
 - column value normalizer arg- OPTIONAL...if you omitted the normalizer - this is the arg passed into your normilzer function
+- verbose - OPTIONAL - true or false. default is false.
 
 ##Examples
 
@@ -70,7 +71,14 @@ node graphler.js "https://en.wikipedia.org/wiki/List_of_Nvidia_graphics_processi
 ````
 node graphler.js "https://en.wikipedia.org/wiki/List_of_Ultimate_Marvel_characters" "" "ul" "characters by starting letter of name" "bar" "return str[0];" "str"
 ````
-
+###Zombie Movies By Year
+````
+node graphler.js "https://en.wikipedia.org/wiki/List_of_zombie_films" "year" "th" "movies per year" "line" "" ""
+````
+###Flat Filter of Zombie Movies By Title Containing of the dead.
+````
+node graphler.js "https://en.wikipedia.org/wiki/List_of_zombie_films" "title" "th" "movies per year" "line" "str = str.toLowerCase();var index = str.indexOf('of the dead');if(index !== -1){return str;}return ''" "str"
+````
 
 ###Hey I want to save my graphs !
 
@@ -83,7 +91,3 @@ Understandable. From you browser simply select 'save page as'. Everything the gr
 - No support for overlapping data , or series. 
 
 - Works in a very anonymous way;treats dom elements generally. For example, there is currently no way to say grab data from the 6th , and only 6th table on a page, if the column identifier is shared with other tables. Furthermore, specific selectors like #id's and .class selectors are not supported.
-
-#TODO
-- add support for ul and ol
-
