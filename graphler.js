@@ -43,6 +43,9 @@ function buildDataURI(chunks) {
     var $ = cheerio.load(chunks);
     var tables;
     var dataset;
+    if (gdata.indexOf('[') === 0) {
+        gdata = gdata.slice(1, gdata.length - 1).split(',');
+    }
     switch (eltype) {
         case 'td':
         case 'th':
@@ -61,9 +64,6 @@ function buildDataURI(chunks) {
             break;
     }
     log('transforming column values with', transformF + '...');
-    if (gdata.indexOf('[') === 0) {
-        gdata = gdata.slice(1, gdata.length - 1).split(',');
-    }
     var groups = _.groupBy(dataset, function(data) {
         return data.value;
     });

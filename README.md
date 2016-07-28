@@ -79,6 +79,10 @@ node graphler.js "https://en.wikipedia.org/wiki/List_of_zombie_films" "year" "th
 ````
 node graphler.js "https://en.wikipedia.org/wiki/List_of_zombie_films" "title" "th" "movies per year" "line" "str = str.toLowerCase();var index = str.indexOf('of the dead');if(index !== -1){return str;}return ''" "str"
 ````
+###U.S. Hurricanes By Month
+````
+node graphler.js "https://en.wikipedia.org/wiki/List_of_United_States_hurricanes" ["date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach","date of closest approach"] "th" "us hurricanes by month" "bar" "var split = str.split(' '); return split[0];" "str" true
+````
 
 ###Hey I want to save my graphs !
 
