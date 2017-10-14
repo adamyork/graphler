@@ -21,9 +21,18 @@ var glabel = process.argv[5];
 var gtype = process.argv[6];
 var transformF = process.argv[7];
 var transformArg = process.argv[8];
-var verbose = process.argv[9] || false;
+var verbose = process.argv[9];
+var size = process.argv[10];
 
-var G_LOG_PREFIX = chalk.magenta('wiki-bar-graph');
+if (verbose) {
+    verbose = !!verbose;
+}
+
+if (size) {
+    size = parseInt(size);
+}
+
+var G_LOG_PREFIX = chalk.magenta('graphler');
 var G_LOG_POSTFIX = chalk.magenta('goodbye') + chalk.blue('!');
 
 function log() {
@@ -39,7 +48,7 @@ function log() {
     console.log(str);
 }
 
-function buildDataURI(chunks) {
+function buildDataURI(chunks, concat) {
     var $ = cheerio.load(chunks);
     var tables;
     var dataset;
@@ -64,17 +73,51 @@ function buildDataURI(chunks) {
             break;
     }
     log('transforming column values with', transformF + '...');
-    var groups = _.groupBy(dataset, function(data) {
-        return data.value;
-    });
-    var values = _.map(groups, function(group) {
-        return group[0].value;
-    });
-    var counts = _.map(groups, function(group) {
-        return group.length;
-    });
+    var templateFile;
+    var values;
+    var counts;
+    if (gtype === 'timeline') {
+        templateFile = 'graph-template-timeline.html';
+        var labels = [];
+        var dates = [];
+        _.each(dataset, function(data) {
+            if (data.value.start) {
+                dates.push(data.value);
+            } else {
+                labels.push(data.value);
+            }
+        });
+        console.log('labels.length', labels.length);
+        console.log('dates.length', dates.length);
+        values = _.map(labels, function(label, i) {
+            return {
+                'id': i,
+                'content': label,
+                'title': label,
+                'start': dates[i].start,
+                'end': dates[i].end
+            };
+        });
+    } else {
+        templateFile = 'graph-template.html';
+        var groups = _.groupBy(dataset, function(data) {
+            return data.value;
+        });
+        values = _.map(groups, function(group) {
+            return group[0].value;
+        });
+        counts = _.map(groups, function(group) {
+            return group.length;
+        });
+        if (concat) {
+            return {
+                values: values,
+                counts: counts
+            };
+        }
+    }
     log('rendering page template...');
-    fs.readFile('graph-template.html', function(err, data) {
+    fs.readFile(templateFile, function(err, data) {
         if (err) {
             throw err;
         }
@@ -83,7 +126,7 @@ function buildDataURI(chunks) {
     });
 }
 
-function getDatasetFor(data, label, tables, transformF, transformArg, $, count, memo, matched) {
+function getDatasetFor(data, label, tables, transformF, transformArg, $, count, memo, matched) { //jshint ignore:line
     var current;
     var found;
     var index;
@@ -135,6 +178,16 @@ function getDatasetFor(data, label, tables, transformF, transformArg, $, count, 
     }
     var target = $(found);
     var filtered = target.find('tr td:nth-child(' + (index + 1) + ')');
+    if (size === 1) {
+        filtered = filtered.slice(0, 1);
+    } else if (size > 1) {
+        filtered = filtered.slice(0, size);
+    }
+    if (gtype !== 'timeline') {
+        filtered = filtered.filter(function(i, cell) {
+            return $(cell).text().trim() !== '';
+        });
+    }
     var transformed = filtered.map(function(i, cell) {
         var text = $(cell).text();
         if (transformF) {
@@ -202,7 +255,7 @@ function sendDataURI(data, values, counts) {
         log('launching data uri...');
         log('cleaning up...');
         setTimeout(function() {
-            log('shutting down. thank you for using wiki-bar-graph.');
+            log('shutting down. thank you for using graphler.');
             log(G_LOG_POSTFIX);
             server.close();
             process.exit(0);
@@ -232,18 +285,49 @@ function generateHex(previous) {
     }
 }
 
-log(G_LOG_PREFIX);
-log('getting data for', url + '...');
-
-request
-    .get(url)
-    .on('response', function(response) {
-        var chunks;
-        response.on('data', function(chunk) {
-            chunks += chunk;
+if (url.indexOf('[') !== -1) {
+    url = url.slice(1, url.length - 1);
+    var urls = url.split(',');
+    var allData = [];
+    for (var i = 0; i < urls.length; i++) {
+        request
+            .get(url)
+            .on('response', function(response) {
+                var chunks;
+                response.on('data', function(chunk) {
+                    chunks += chunk;
+                });
+                response.on('end', function() {
+                    log('building the data uri', glabel + ' from column ' + gdata + '...');
+                    var set = buildDataURI(chunks, false);
+                    allData.push(set);
+                    if (allData.length === urls.length) {
+                        // log('rendering page template...');
+                        // fs.readFile('graph-template.html', function(err, data) {
+                        //     if (err) {
+                        //         throw err;
+                        //     }
+                        //     log('generating data uri...');
+                        //     sendDataURI(data, values, counts);
+                        // });
+                        console.log('all done', allData);
+                    }
+                });
+            });
+    }
+} else {
+    log(G_LOG_PREFIX);
+    log('getting data for', url + '...');
+    request
+        .get(url)
+        .on('response', function(response) {
+            var chunks;
+            response.on('data', function(chunk) {
+                chunks += chunk;
+            });
+            response.on('end', function() {
+                log('building the data uri', glabel + ' from column ' + gdata + '...');
+                buildDataURI(chunks, false);
+            });
         });
-        response.on('end', function() {
-            log('building the data uri', glabel + ' from column ' + gdata + '...');
-            buildDataURI(chunks);
-        });
-    });
+}

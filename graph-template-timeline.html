@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>graphler</title>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <meta name="description" content="Demo project with jQuery">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.16.1/vis.css" rel="stylesheet" type="text/css" />
+    </head>
+    <body>
+        <div id="visualization"></div>
+    </body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.16.1/vis.js"></script>
+    <script type="text/javascript">
+        var container = document.getElementById('visualization');
+        var items = new vis.DataSet(labelsToken);
+        var options = {};
+        var timeline = new vis.Timeline(container, items, options);
+    </script>
+</html>
