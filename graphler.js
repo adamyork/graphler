@@ -1,43 +1,100 @@
 /*!
- * whamda
- * Copyright(c) 2016 Adam York
+ * graphler
+ * Copyright(c) 2016-2019 Adam York
  * MIT Licensed
  */
 
 'use strict';
 
-var cheerio = require('cheerio');
-var request = require('request');
-var express = require('express');
-var _ = require('underscore-node');
-var fs = require('fs');
-var safeOpen = require('open');
-var chalk = require('chalk');
+const cheerio = require('cheerio');
+const request = require('request');
+const _ = require('underscore');
+const safeOpen = require('open');
+const chalk = require('chalk');
+const fs = require('fs');
+const yargs = require('yargs');
 
-var url = process.argv[2];
-var gdata = process.argv[3];
-var eltype = process.argv[4];
-var glabel = process.argv[5];
-var gtype = process.argv[6];
-var transformF = process.argv[7];
-var transformArg = process.argv[8];
-var verbose = process.argv[9];
-var size = process.argv[10];
+var verbose = false;
+var limit = 0;
+var formatResultIndex = 0;
+var format = 'raw';
+var graphTitle = 'graphler';
 
-if (verbose) {
-    verbose = !!verbose;
+const G_LOG_PREFIX = chalk.magenta('Graphler');
+const G_LOG_POSTFIX = chalk.magenta('Goodbye') + chalk.blue('!');
+
+const argv = yargs
+    .command('$0 <url> <data column name> <graph type>', 'graph the data', (yargs) => {
+      yargs.positional('url', {
+        describe: 'URL to fetch content from',
+        type: 'string'
+      })
+      .positional('data column name', {
+        describe: 'if selecting data from a table, this is the column title that contains the data cells.if selecting from a list it is the single value from one list element.',
+        type: 'string'
+      })
+      .positional('graph type', {
+        describe: 'supported types are line,bar,pie, and radar',
+        type: 'string',
+        default: 'line'
+      })
+    })
+    .option('format', {
+        alias: 'f',
+        description: 'a regex used for searching the data column cells or list elements for values',
+        type: 'string',
+    })
+    .option('index', {
+        alias: 'i',
+        description: 'only used if a format is specified that results in more than one match',
+        type: 'string',
+    })
+    .option('verbose', {
+        alias: 'v',
+        description: 'enable verbose logging',
+        type: 'boolean',
+    })
+    .option('limit', {
+        alias: 'l',
+        description: 'truncate the results to graph',
+        type: 'number',
+    })
+    .option('title', {
+        alias: 't',
+        description: 'a graph title',
+        type: 'string',
+    })
+    .help()
+    .alias('help', 'h')
+    .argv;
+
+const url = argv.url;
+const dataColumnName = argv.datacolumnname;
+const graphType = argv.graphtype;
+
+if (argv.verbose) {
+    verbose = true;
 }
 
-if (size) {
-    size = parseInt(size);
+if (argv.limit) {
+    limit = argv.limit;
 }
 
-var G_LOG_PREFIX = chalk.magenta('graphler');
-var G_LOG_POSTFIX = chalk.magenta('goodbye') + chalk.blue('!');
+if (argv.format) {
+    format = argv.format;
+}
+
+if (argv.index) {
+    formatResultIndex = argv.index;
+}
+
+if (argv.title) {
+    graphTitle = argv.title;
+}
 
 function log() {
     var str = '';
-    _.each(arguments, function(argument, i) {
+    _.each(arguments, (argument, i) => {
         if (i === 0) {
             argument = chalk.green(argument);
         } else {
@@ -48,85 +105,92 @@ function log() {
     console.log(str);
 }
 
-function buildDataURI(chunks, concat) {
-    var $ = cheerio.load(chunks);
-    var tables;
-    var dataset;
-    if (gdata.indexOf('[') === 0) {
-        gdata = gdata.slice(1, gdata.length - 1).split(',');
+function logErrorAndExit() {
+    var str = '';
+    _.each(arguments, (argument, i) => {
+        if (i === 0) {
+            argument = chalk.red(argument);
+        } else {
+            argument = chalk.white(argument);
+        }
+        str += ' ' + argument;
+    });
+    console.log(str);
+    process.exit(1);
+}
+
+function build(chunks){
+    let $ = cheerio.load(chunks);
+    let domString = chunks.toLowerCase();
+    var normalizedColumnLabel = dataColumnName.toLowerCase();
+    var indexOfColumnString;
+    if (normalizedColumnLabel.indexOf('[') === 0) {
+        normalizedColumnLabel = normalizedColumnLabel.slice(1, normalizedColumnLabel.length - 1).split(',');
+        indexOfColumnString = domString.indexOf(normalizedColumnLabel[0]);
+    } else {
+        indexOfColumnString = domString.indexOf(normalizedColumnLabel);
     }
-    switch (eltype) {
+    if(indexOfColumnString === -1){
+        logErrorAndExit('Column Not Found.');
+    }
+    let fromColumnStringIndexToEof = domString.substring(indexOfColumnString,domString.length);
+    let chars = fromColumnStringIndexToEof.split('');
+    let columnTagType = getColumnTagType(chars);
+    let dataset = getDataSet(normalizedColumnLabel,columnTagType,$);
+    renderAndPublish(dataset);
+}
+
+function getColumnTagType(chars){
+    var str = '';
+    var tagType = '';
+    for(var i=0; i < chars.length; i++){
+        str += chars[i];
+        if(str.indexOf('</th>') !== -1){
+            tagType = 'th';
+            break;
+        }
+        if(str.indexOf('</td>') !== -1){
+            tagType = 'td';
+            break;
+        }
+        if(str.indexOf('</ul>') !== -1){
+            tagType = 'ul';
+            break;
+        }
+        if(str.indexOf('</ol>') !== -1){
+            tagType = 'ol';
+            break;
+        }
+    }
+    if(tagType === ''){
+        logErrorAndExit('Unknown tag type for column.');
+    }
+    if(verbose){
+        log('Column type is ' + tagType);
+    }
+    return tagType;
+}
+
+function getDataSet(columnName,columnTagType,$){
+    var dataset;
+    switch (columnTagType) {
         case 'td':
         case 'th':
-            tables = $('table');
-            dataset = getDatasetFor(gdata, glabel, tables, transformF, transformArg, $);
+            dataset = getDatasetFor(columnName, 'quantity', columnTagType, $('table'), $);
             break;
         case 'ul':
-            tables = $('ul');
-            dataset = getDatasetForList(gdata, glabel, tables, transformF, transformArg, $);
-            break;
+            dataset = getDatasetForList(columnName, 'quantity', $('ul'), $);
+            break
         case 'ol':
-            tables = $('ol');
-            dataset = getDatasetForList(gdata, glabel, tables, transformF, transformArg, $);
+            dataset = getDatasetForList(columnName, 'quantity', $('ol'), $);
             break;
         default:
             break;
     }
-    log('transforming column values with', transformF + '...');
-    var templateFile;
-    var values;
-    var counts;
-    if (gtype === 'timeline') {
-        templateFile = 'graph-template-timeline.html';
-        var labels = [];
-        var dates = [];
-        _.each(dataset, function(data) {
-            if (data.value.start) {
-                dates.push(data.value);
-            } else {
-                labels.push(data.value);
-            }
-        });
-        console.log('labels.length', labels.length);
-        console.log('dates.length', dates.length);
-        values = _.map(labels, function(label, i) {
-            return {
-                'id': i,
-                'content': label,
-                'title': label,
-                'start': dates[i].start,
-                'end': dates[i].end
-            };
-        });
-    } else {
-        templateFile = 'graph-template.html';
-        var groups = _.groupBy(dataset, function(data) {
-            return data.value;
-        });
-        values = _.map(groups, function(group) {
-            return group[0].value;
-        });
-        counts = _.map(groups, function(group) {
-            return group.length;
-        });
-        if (concat) {
-            return {
-                values: values,
-                counts: counts
-            };
-        }
-    }
-    log('rendering page template...');
-    fs.readFile(templateFile, function(err, data) {
-        if (err) {
-            throw err;
-        }
-        log('generating data uri...');
-        sendDataURI(data, values, counts);
-    });
+    return dataset;
 }
 
-function getDatasetFor(data, label, tables, transformF, transformArg, $, count, memo, matched) { //jshint ignore:line
+function getDatasetFor(data, label, columnTagType, tables, $, count, memo, matched) { //jshint ignore:line
     var current;
     var found;
     var index;
@@ -145,12 +209,15 @@ function getDatasetFor(data, label, tables, transformF, transformArg, $, count, 
         log('found ' + tables.length + ' tables');
     }
     tables.each(function(i, table) {
-        var headers = $(table).find(eltype);
+        let headers = $(table).find(columnTagType);
         if (verbose) {
             log('found ' + headers.length + ' headers in table ' + i);
         }
         headers.each(function(j, header) {
-            var text = $(header).text().toLowerCase();
+            let text = $(header).text().toLowerCase();
+            if (verbose) {
+                log('found text ' + text + ' in header ' + j);
+            }
             if (count) {
                 if (text.indexOf(current) !== -1 && !_.contains(matched, i)) {
                     found = table;
@@ -173,32 +240,37 @@ function getDatasetFor(data, label, tables, transformF, transformArg, $, count, 
         }
     });
     if (!found) {
-        console.log('table not found');
+        logErrorAndExit('Table not found');
         return;
     }
-    var target = $(found);
+    let target = $(found);
     var filtered = target.find('tr td:nth-child(' + (index + 1) + ')');
-    if (size === 1) {
+    if (limit === 1) {
         filtered = filtered.slice(0, 1);
-    } else if (size > 1) {
+    } else if (limit > 1) {
         filtered = filtered.slice(0, size);
     }
-    if (gtype !== 'timeline') {
-        filtered = filtered.filter(function(i, cell) {
-            return $(cell).text().trim() !== '';
-        });
+    if (verbose) {
+        log('Found ' + filtered.length + ' cells in matching column ');
     }
-    var transformed = filtered.map(function(i, cell) {
-        var text = $(cell).text();
-        if (transformF) {
-            if (verbose) {
-                log('text before transform', text);
+    let transformed = filtered.map(function(i, cell) {
+        let text = $(cell).text();
+        var value;
+        if(format !== 'raw'){
+            let pattern = new RegExp(format,'g');
+            let allMatches = [];
+            var matchedText;
+            while((matchedText = pattern.exec(text)) !== null){
+                allMatches.push(matchedText[0]);
             }
-            var f = new Function(transformArg, transformF); //jshint ignore:line
-            text = f(text);
-            if (verbose) {
-                log('text after transform', text);
+            if(allMatches.length > 0){
+                return {
+                    'value': allMatches[formatResultIndex]
+                };
             }
+            return {
+                    'value': allMatches[0]
+            };
         }
         return {
             'value': text
@@ -210,66 +282,138 @@ function getDatasetFor(data, label, tables, transformF, transformArg, $, count, 
     }
     memo.push(transformed);
     if (count === data.length) {
-        var flattened = _.flatten(memo);
-        return flattened;
+        return _.flatten(memo);
     } else {
-        return getDatasetFor(data, label, tables, transformF, transformArg, $, count, memo, matched);
+        return getDatasetFor(data, label, columnTagType, tables, $, count, memo, matched);
     }
 }
 
-function getDatasetForList(data, label, tables, transformF, transformArg, $) {
-    var found = [];
-    tables.each(function(i, table) {
-        var headers = $(table).find('li');
-        headers.each(function(j, header) {
-            var text = $(header).text().toLowerCase();
-            if (transformF) {
-                var f = new Function(transformArg, transformF); //jshint ignore:line
-                text = f(text);
-            }
-            var obj = {
-                'value': text
-            };
+function getDatasetForList(data, label, tables, $) {
+    let found = [];
+    if (verbose) {
+        log('Found ' + tables.length + ' lists');
+    }
+    tables.each((i, table) => {
+        let headers = $(table).find('li');
+        headers.each((j, header) => {
+            let text = $(header).text().toLowerCase();
+            let obj = transform(text);
             found.push(obj);
         });
     });
     return found;
 }
 
-function sendDataURI(data, values, counts) {
+function transform(text){
+    var obj;
+    if(format !== 'raw'){
+        let pattern = new RegExp(format,'g');
+        let allMatches = [];
+        var matchedText;
+        while((matchedText = pattern.exec(text)) !== null){
+            allMatches.push(matchedText[0]);
+        }
+        if(allMatches.length > 0){
+            obj = {
+                'value': allMatches[formatResultIndex]
+            };
+        }
+        obj = {
+                'value': allMatches[0]
+        };
+    } else {
+        obj = {
+            'value': text
+        };
+    }
+    return obj;
+}
+
+function renderAndPublish(dataset){
+    let templateFile = 'graphler-template.html';
+    let groups = _.groupBy(dataset, (data) => {
+        return data.value;
+    });
+    let values = _.map(groups, (group) => {
+        return group[0].value;
+    });
+    let counts = _.map(groups, (group) => {
+        return group.length;
+    });
+    log('Rendering page template...');
+    fs.readFile(templateFile, (err, data) => {
+        if (err) {
+            logErrorAndExit('Cant read template file.' + err);
+        }
+        log('Generating data uri...');
+        publish(data, values, counts);
+    });
+}
+
+function processLocalFile(){
+    fs.readFile(url, 'utf8', function(err, data) {
+        if (err) {
+            logErrorAndExit('Cant read local data file.' +err);
+        }
+        let parsed = JSON.parse(data);
+        let elements = parsed[dataColumnName];
+        var transformed = elements.map((element) => {
+            return transform(element.text);
+        });
+        let templateFile = 'graphler-template.html';
+        let groups = _.groupBy(transformed, (data) => {
+            return data.value;
+        });
+        let values = _.map(groups, (group) => {
+            return group[0].value;
+        });
+        let counts = _.map(groups, (group) => {
+            return group.length;
+        });
+        log('rendering page template...');
+        fs.readFile(templateFile, (err, data) => {
+            if (err) {
+                logErrorAndExit('Cant read templatefile.' + err);
+            }
+            log('generating data uri...');
+            publish(data, values, counts, dataColumnName.toLowerCase());
+        });
+    });
+}
+
+function publish(data, values, counts) {
     var html = data.toString();
-    html = html.replace('titleToken', '"' + glabel + '"');
-    html = html.replace('chartTypeToken', '"' + gtype + '"');
+    html = html.replace('titleToken', '"' + graphTitle + '"');
+    html = html.replace('chartTypeToken', '"' + graphType + '"');
     html = html.replace('labelsToken', JSON.stringify(values));
     html = html.replace('dataToken', '[' + counts + ']');
-    if (gtype === 'bar' || gtype === 'pie') {
+    if (graphType === 'bar' || graphType === 'pie') {
         html = html.replace('colorsToken', JSON.stringify(getColors(values)));
     } else {
         html = html.replace('colorsToken', '"' + generateHex() + '"');
     }
-    var buf = new Buffer(html, 'UTF-8');
-    var dataURI = 'data:text/html;base64,' + buf.toString('base64');
-    var app = express();
-    app.use(express.static('static'));
-    app.get('/data', function(req, res) {
-        log('launching data uri...');
-        log('cleaning up...');
-        setTimeout(function() {
-            log('shutting down. thank you for using graphler.');
-            log(G_LOG_POSTFIX);
-            server.close();
-            process.exit(0);
-        }, 1000);
-        res.send(dataURI);
-    });
-    var server = app.listen(function() {
-        var port = server.address().port;
-        safeOpen('http://localhost:' + port + '?port=' + port);
+    let filename = graphTitle.replace(' ','') + (Math.random() * 10 / Math.random() * 10);
+    if (!fs.existsSync('generated')) {
+        fs.mkdir('generated', { recursive: true }, (err) => {
+            if (err) throw err;
+            writeFile(html,filename);
+        });
+    } else {
+        writeFile(html,filename);
+    }
+}
+
+function writeFile(html,filename){
+    fs.writeFile('generated/'+ filename + '.html', html, (err) => {
+        if (err) throw err;
+        (async()=>{
+            await safeOpen('file://' + __dirname + '/generated/'+ filename +'.html');
+        })();
     });
 }
 
 function getColors(values) {
-    var colors = [];
+    let colors = [];
     _.each(values, function() {
         colors.push(generateHex());
     });
@@ -277,7 +421,7 @@ function getColors(values) {
 }
 
 function generateHex(previous) {
-    var hex = '#' + Math.floor(Math.random() * 16777215).toString(16);
+    let hex = '#' + Math.floor(Math.random() * 16777215).toString(16);
     if (hex !== previous) {
         return hex;
     } else {
@@ -285,39 +429,13 @@ function generateHex(previous) {
     }
 }
 
-if (url.indexOf('[') !== -1) {
-    url = url.slice(1, url.length - 1);
-    var urls = url.split(',');
-    var allData = [];
-    for (var i = 0; i < urls.length; i++) {
-        request
-            .get(url)
-            .on('response', function(response) {
-                var chunks;
-                response.on('data', function(chunk) {
-                    chunks += chunk;
-                });
-                response.on('end', function() {
-                    log('building the data uri', glabel + ' from column ' + gdata + '...');
-                    var set = buildDataURI(chunks, false);
-                    allData.push(set);
-                    if (allData.length === urls.length) {
-                        // log('rendering page template...');
-                        // fs.readFile('graph-template.html', function(err, data) {
-                        //     if (err) {
-                        //         throw err;
-                        //     }
-                        //     log('generating data uri...');
-                        //     sendDataURI(data, values, counts);
-                        // });
-                        console.log('all done', allData);
-                    }
-                });
-            });
-    }
+if (url.indexOf('.json') !== -1) {
+    log(G_LOG_PREFIX);
+    log('Loading local data', url + '...');
+    processLocalFile();
 } else {
     log(G_LOG_PREFIX);
-    log('getting data for', url + '...');
+    log('Fetching data for', url + '...');
     request
         .get(url)
         .on('response', function(response) {
@@ -326,8 +444,8 @@ if (url.indexOf('[') !== -1) {
                 chunks += chunk;
             });
             response.on('end', function() {
-                log('building the data uri', glabel + ' from column ' + gdata + '...');
-                buildDataURI(chunks, false);
+                log('Fetched data from ', url + ' for column ' + dataColumnName + '...');
+                build(chunks, false);
             });
         });
 }
