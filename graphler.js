@@ -340,12 +340,12 @@ function renderAndPublish(dataset){
     let counts = _.map(groups, (group) => {
         return group.length;
     });
-    log('Rendering page template...');
+    log('Rendering page graphs...');
     fs.readFile(templateFile, (err, data) => {
         if (err) {
             logErrorAndExit('Cant read template file.' + err);
         }
-        log('Generating data uri...');
+        log('Generating file...');
         publish(data, values, counts);
     });
 }
@@ -370,12 +370,12 @@ function processLocalFile(){
         let counts = _.map(groups, (group) => {
             return group.length;
         });
-        log('rendering page template...');
+        log('Rendering page graphs...');
         fs.readFile(templateFile, (err, data) => {
             if (err) {
                 logErrorAndExit('Cant read templatefile.' + err);
             }
-            log('generating data uri...');
+            log('Generating File...');
             publish(data, values, counts, dataColumnName.toLowerCase());
         });
     });
@@ -406,9 +406,14 @@ function publish(data, values, counts) {
 function writeFile(html,filename){
     fs.writeFile('generated/'+ filename + '.html', html, (err) => {
         if (err) throw err;
-        (async()=>{
+        var promise = (async()=>{
+            log('File ' + filename + ' create in ' + __dirname + '\\generated\\');
             await safeOpen('file://' + __dirname + '/generated/'+ filename +'.html');
         })();
+        promise.then(()=>{
+             log('Cleaning up...');
+             log(G_LOG_POSTFIX);
+        });
     });
 }
 
